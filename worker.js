@@ -12,7 +12,8 @@ const HTML = `<!DOCTYPE html>
         h1 { color: #333; text-align: center; margin-bottom: 10px; font-size: 28px; }
         .subtitle { color: #666; text-align: center; margin-bottom: 25px; font-size: 14px; }
         .card { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .card-title { font-size: 14px; color: #666; margin-bottom: 10px; font-weight: 600; }
+        .card-title { font-size: 14px; color: #666; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .count { color: #667eea; font-weight: 500; }
         textarea { width: 100%; height: 150px; margin: 10px 0; padding: 12px; font-family: monospace; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; }
         textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
         .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -25,10 +26,13 @@ const HTML = `<!DOCTYPE html>
         .history { margin-top: 20px; }
         .history-title { font-size: 14px; color: #666; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
         .history-list { max-height: 300px; overflow-y: auto; }
-        .history-item { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .history-item { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; }
         .history-item:hover { background: #e9ecef; transform: translateX(4px); }
-        .history-item .time { font-size: 12px; color: #999; }
+        .history-item:hover .delete-btn { opacity: 1; }
+        .history-item .time { font-size: 12px; color: #999; padding-right: 30px; }
         .history-item .content { font-size: 13px; color: #333; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .delete-btn { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: none; background: #dc3545; color: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 24px; text-align: center; opacity: 0; transition: opacity 0.2s; padding: 0; }
+        .delete-btn:hover { background: #c82333; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #28a745; color: #fff; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.3s; z-index: 1000; }
         .toast.show { transform: translateX(-50%) translateY(0); }
         @media (max-width: 600px) {
@@ -52,7 +56,7 @@ const HTML = `<!DOCTYPE html>
         <p class="subtitle">格式: 邮箱----密码----授权码----日期</p>
         
         <div class="card">
-            <div class="card-title">输入数据</div>
+            <div class="card-title">输入数据 <span id="inputCount" class="count">0 条</span></div>
             <textarea id="input" placeholder="请输入数据，每行一个记录..."></textarea>
         </div>
         
@@ -63,7 +67,7 @@ const HTML = `<!DOCTYPE html>
         </div>
         
         <div class="card">
-            <div class="card-title">输出结果</div>
+            <div class="card-title">输出结果 <span id="outputCount" class="count">0 条</span></div>
             <div id="output" class="output"></div>
         </div>
         
@@ -88,10 +92,10 @@ const HTML = `<!DOCTYPE html>
             } catch { return []; }
         }
 
-        function saveHistory(input, output) {
+        function saveHistory(input, output, inputCount, outputCount) {
             if (!input.trim() || !output.trim()) return;
             let history = getHistory();
-            history.unshift({ time: new Date().toLocaleString(), input, output });
+            history.unshift({ time: new Date().toLocaleString(), input, output, inputCount, outputCount });
             if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
             renderHistory();
@@ -102,7 +106,8 @@ const HTML = `<!DOCTYPE html>
             const list = document.getElementById('historyList');
             list.innerHTML = history.map((item, i) => \`
                 <div class="history-item" onclick="loadHistory(\${i})">
-                    <div class="time">\${item.time}</div>
+                    <button class="delete-btn" onclick="event.stopPropagation(); deleteHistoryItem(\${i})">×</button>
+                    <div class="time">\${item.time}    输入 \${item.inputCount} 条 → 输出 \${item.outputCount} 条</div>
                     <div class="content">\${item.output.split('\\n')[0]}...</div>
                 </div>
             \`).join('');
@@ -113,6 +118,8 @@ const HTML = `<!DOCTYPE html>
             if (history) {
                 document.getElementById('input').value = history.input;
                 document.getElementById('output').textContent = history.output;
+                document.getElementById('inputCount').textContent = (history.inputCount || 0) + ' 条';
+                document.getElementById('outputCount').textContent = (history.outputCount || 0) + ' 条';
             }
         }
 
@@ -121,25 +128,32 @@ const HTML = `<!DOCTYPE html>
             renderHistory();
         }
 
+        function deleteHistoryItem(index) {
+            let history = getHistory();
+            history.splice(index, 1);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            renderHistory();
+        }
+
         function extract() {
             const input = document.getElementById('input').value;
-            const lines = input.split('\\n');
+            const lines = input.split('\\n').filter(l => l.trim());
+            const inputCount = lines.length;
             let result = '';
             
             for (let line of lines) {
-                line = line.trim();
-                if (!line) continue;
-                
                 const parts = line.split('----');
                 if (parts.length >= 4) {
-                    const email = parts[0].trim();
-                    const authCode = parts[2].trim();
-                    result += email + '----' + authCode + '\\n';
+                    result += parts[0].trim() + '----' + parts[2].trim() + '\\n';
                 }
             }
             
+            const outputCount = result ? result.trim().split('\\n').length : 0;
+            
             document.getElementById('output').textContent = result;
-            if (result) saveHistory(input, result);
+            document.getElementById('inputCount').textContent = inputCount + ' 条';
+            document.getElementById('outputCount').textContent = outputCount + ' 条';
+            if (result) saveHistory(input, result, inputCount, outputCount);
         }
         
         function copyResult() {
@@ -156,6 +170,8 @@ const HTML = `<!DOCTYPE html>
         function clearAll() {
             document.getElementById('input').value = '';
             document.getElementById('output').textContent = '';
+            document.getElementById('inputCount').textContent = '0 条';
+            document.getElementById('outputCount').textContent = '0 条';
         }
 
         renderHistory();
