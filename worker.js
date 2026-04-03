@@ -1,0 +1,174 @@
+const HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮件数据提取</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); padding: 30px; }
+        h1 { color: #333; text-align: center; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { color: #666; text-align: center; margin-bottom: 25px; font-size: 14px; }
+        .card { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .card-title { font-size: 14px; color: #666; margin-bottom: 10px; font-weight: 600; }
+        textarea { width: 100%; height: 150px; margin: 10px 0; padding: 12px; font-family: monospace; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; }
+        textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+        button { padding: 12px 24px; cursor: pointer; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: #fff; }
+        .btn-primary:hover { background: #5568d3; transform: translateY(-1px); }
+        .btn-secondary { background: #e9ecef; color: #333; }
+        .btn-secondary:hover { background: #dee2e6; }
+        .output { background: #1e1e1e; color: #a9b7c6; padding: 15px; border-radius: 6px; white-space: pre-wrap; min-height: 100px; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; line-height: 1.6; }
+        .history { margin-top: 20px; }
+        .history-title { font-size: 14px; color: #666; margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .history-list { max-height: 300px; overflow-y: auto; }
+        .history-item { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .history-item:hover { background: #e9ecef; transform: translateX(4px); }
+        .history-item .time { font-size: 12px; color: #999; }
+        .history-item .content { font-size: 13px; color: #333; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #28a745; color: #fff; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.3s; z-index: 1000; }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            .container { padding: 20px 16px; border-radius: 10px; }
+            h1 { font-size: 22px; margin-bottom: 6px; }
+            .subtitle { font-size: 13px; margin-bottom: 18px; }
+            .card { padding: 14px; margin-bottom: 14px; }
+            textarea { height: 120px; font-size: 16px; padding: 10px; }
+            .btn-group { flex-direction: column; gap: 8px; }
+            button { width: 100%; padding: 14px; font-size: 15px; }
+            .output { font-size: 14px; padding: 12px; min-height: 80px; }
+            .history-item { padding: 10px; }
+            .history-list { max-height: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 邮件数据提取</h1>
+        <p class="subtitle">格式: 邮箱----密码----授权码----日期</p>
+        
+        <div class="card">
+            <div class="card-title">输入数据</div>
+            <textarea id="input" placeholder="请输入数据，每行一个记录..."></textarea>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn-primary" onclick="extract()">提取</button>
+            <button class="btn-secondary" onclick="copyResult()">复制结果</button>
+            <button class="btn-secondary" onclick="clearAll()">清空</button>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">输出结果</div>
+            <div id="output" class="output"></div>
+        </div>
+        
+        <div class="history">
+            <div class="history-title">
+                <span>历史记录</span>
+                <button onclick="clearHistory()" style="padding: 6px 12px; font-size: 12px;">清空历史</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast">已复制到剪贴板</div>
+
+    <script>
+        const STORAGE_KEY = 'emailExtractorHistory';
+        const MAX_HISTORY = 20;
+
+        function getHistory() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            } catch { return []; }
+        }
+
+        function saveHistory(input, output) {
+            if (!input.trim() || !output.trim()) return;
+            let history = getHistory();
+            history.unshift({ time: new Date().toLocaleString(), input, output });
+            if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const history = getHistory();
+            const list = document.getElementById('historyList');
+            list.innerHTML = history.map((item, i) => \`
+                <div class="history-item" onclick="loadHistory(\${i})">
+                    <div class="time">\${item.time}</div>
+                    <div class="content">\${item.output.split('\\n')[0]}...</div>
+                </div>
+            \`).join('');
+        }
+
+        function loadHistory(index) {
+            const history = getHistory()[index];
+            if (history) {
+                document.getElementById('input').value = history.input;
+                document.getElementById('output').textContent = history.output;
+            }
+        }
+
+        function clearHistory() {
+            localStorage.removeItem(STORAGE_KEY);
+            renderHistory();
+        }
+
+        function extract() {
+            const input = document.getElementById('input').value;
+            const lines = input.split('\\n');
+            let result = '';
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                const parts = line.split('----');
+                if (parts.length >= 4) {
+                    const email = parts[0].trim();
+                    const authCode = parts[2].trim();
+                    result += email + '----' + authCode + '\\n';
+                }
+            }
+            
+            document.getElementById('output').textContent = result;
+            if (result) saveHistory(input, result);
+        }
+        
+        function copyResult() {
+            const text = document.getElementById('output').textContent;
+            if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const toast = document.getElementById('toast');
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 3000);
+                });
+            }
+        }
+        
+        function clearAll() {
+            document.getElementById('input').value = '';
+            document.getElementById('output').textContent = '';
+        }
+
+        renderHistory();
+    </script>
+</body>
+</html>`;
+
+export default {
+  async fetch(request) {
+    return new Response(HTML, {
+      headers: {
+        'content-type': 'text/html;charset=UTF-8',
+      },
+    });
+  },
+};
