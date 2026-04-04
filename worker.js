@@ -63,6 +63,7 @@ const HTML = `<!DOCTYPE html>
         <div class="btn-group">
             <button class="btn-primary" onclick="extract()">提取</button>
             <button class="btn-secondary" onclick="copyResult()">复制结果</button>
+            <button class="btn-secondary" onclick="copyEmails()">复制邮箱</button>
             <button class="btn-secondary" onclick="clearAll()">清空</button>
         </div>
         
@@ -163,6 +164,22 @@ const HTML = `<!DOCTYPE html>
                     const toast = document.getElementById('toast');
                     toast.classList.add('show');
                     setTimeout(() => toast.classList.remove('show'), 3000);
+                });
+            }
+        }
+        
+        function copyEmails() {
+            const text = document.getElementById('output').textContent;
+            if (text) {
+                const emails = text.trim().split('\n').map(line => line.split('----')[0].trim()).join('\n');
+                navigator.clipboard.writeText(emails).then(() => {
+                    const toast = document.getElementById('toast');
+                    toast.textContent = '已复制邮箱列表';
+                    toast.classList.add('show');
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                        toast.textContent = '已复制到剪贴板';
+                    }, 3000);
                 });
             }
         }
