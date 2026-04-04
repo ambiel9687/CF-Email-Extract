@@ -28,11 +28,15 @@ const HTML = `<!DOCTYPE html>
         .history-list { max-height: 300px; overflow-y: auto; }
         .history-item { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; position: relative; }
         .history-item:hover { background: #e9ecef; transform: translateX(4px); }
-        .history-item:hover .delete-btn { opacity: 1; }
-        .history-item .time { font-size: 12px; color: #999; padding-right: 30px; }
+        .history-item:hover .action-btns { opacity: 1; }
+        .history-item .time { font-size: 12px; color: #999; padding-right: 70px; }
         .history-item .content { font-size: 13px; color: #333; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .delete-btn { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: none; background: #dc3545; color: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 24px; text-align: center; opacity: 0; transition: opacity 0.2s; padding: 0; }
+        .action-btns { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+        .action-btn { width: 24px; height: 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 24px; text-align: center; padding: 0; }
+        .delete-btn { background: #dc3545; color: #fff; }
         .delete-btn:hover { background: #c82333; }
+        .copy-emails-btn { background: #28a745; color: #fff; }
+        .copy-emails-btn:hover { background: #218838; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: #28a745; color: #fff; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: transform 0.3s; z-index: 1000; }
         .toast.show { transform: translateX(-50%) translateY(0); }
         @media (max-width: 600px) {
@@ -107,7 +111,10 @@ const HTML = `<!DOCTYPE html>
             const list = document.getElementById('historyList');
             list.innerHTML = history.map((item, i) => \`
                 <div class="history-item" onclick="loadHistory(\${i})">
-                    <button class="delete-btn" onclick="event.stopPropagation(); deleteHistoryItem(\${i})">×</button>
+                    <div class="action-btns">
+                        <button class="action-btn copy-emails-btn" onclick="event.stopPropagation(); copyHistoryEmails(\${i})" title="复制邮箱">📧</button>
+                        <button class="action-btn delete-btn" onclick="event.stopPropagation(); deleteHistoryItem(\${i})" title="删除">×</button>
+                    </div>
                     <div class="time">\${item.time}    输入 \${item.inputCount} 条 → 输出 \${item.outputCount} 条</div>
                     <div class="content">\${item.output.split('\\n')[0]}...</div>
                 </div>
@@ -175,6 +182,23 @@ const HTML = `<!DOCTYPE html>
                 navigator.clipboard.writeText(emails).then(() => {
                     const toast = document.getElementById('toast');
                     toast.textContent = '已复制邮箱列表';
+                    toast.classList.add('show');
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                        toast.textContent = '已复制到剪贴板';
+                    }, 3000);
+                });
+            }
+        }
+        
+        function copyHistoryEmails(index) {
+            const history = getHistory()[index];
+            if (history && history.output) {
+                const emailList = history.output.trim().split('\n').map(line => line.split('----')[0].trim());
+                const emails = emailList.join('\n');
+                navigator.clipboard.writeText(emails).then(() => {
+                    const toast = document.getElementById('toast');
+                    toast.textContent = '已复制 ' + emailList.length + ' 个邮箱';
                     toast.classList.add('show');
                     setTimeout(() => {
                         toast.classList.remove('show');
