@@ -178,7 +178,7 @@ const HTML = `<!DOCTYPE html>
         function copyEmails() {
             const text = document.getElementById('output').textContent;
             if (text) {
-                const emails = text.trim().split('\n').map(line => line.split('----')[0].trim()).join('\n');
+                const emails = text.trim().split('\\n').map(line => line.split('----')[0].trim()).join('\\n');
                 navigator.clipboard.writeText(emails).then(() => {
                     const toast = document.getElementById('toast');
                     toast.textContent = '已复制邮箱列表';
@@ -190,12 +190,12 @@ const HTML = `<!DOCTYPE html>
                 });
             }
         }
-        
+
         function copyHistoryEmails(index) {
             const history = getHistory()[index];
             if (history && history.output) {
-                const emailList = history.output.trim().split('\n').map(line => line.split('----')[0].trim());
-                const emails = emailList.join('\n');
+                const emailList = history.output.trim().split('\\n').map(line => line.split('----')[0].trim());
+                const emails = emailList.join('\\n');
                 navigator.clipboard.writeText(emails).then(() => {
                     const toast = document.getElementById('toast');
                     toast.textContent = '已复制 ' + emailList.length + ' 个邮箱';
