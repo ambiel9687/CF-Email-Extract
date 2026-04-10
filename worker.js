@@ -144,14 +144,22 @@ const HTML = `<!DOCTYPE html>
         }
 
         function extract() {
-            const input = document.getElementById('input').value;
+            let input = document.getElementById('input').value;
+            // 预处理：逗号格式转为标准 ---- 格式
+            input = input.split('\\n').map(line => {
+                if (!line.includes('----') && line.includes(',')) {
+                    return line.replace(/,/g, '----');
+                }
+                return line;
+            }).join('\\n');
+            document.getElementById('input').value = input;
             const lines = input.split('\\n').filter(l => l.trim());
             const inputCount = lines.length;
             let result = '';
-            
+
             for (let line of lines) {
                 const parts = line.split('----');
-                if (parts.length >= 4) {
+                if (parts.length >= 3) {
                     result += parts[0].trim() + '----' + parts[2].trim() + '\\n';
                 }
             }
