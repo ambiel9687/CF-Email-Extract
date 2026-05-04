@@ -68,6 +68,7 @@ const HTML = `<!DOCTYPE html>
             <button class="btn-primary" onclick="extract()">提取</button>
             <button class="btn-secondary" onclick="copyResult()">复制结果</button>
             <button class="btn-secondary" onclick="copyEmails()">复制邮箱</button>
+            <button class="btn-secondary" onclick="reverseResult()">反转结果</button>
             <button class="btn-secondary" onclick="clearAll()">清空</button>
         </div>
         
@@ -215,7 +216,22 @@ const HTML = `<!DOCTYPE html>
                 });
             }
         }
-        
+
+        function reverseResult() {
+            const outputEl = document.getElementById('output');
+            const text = outputEl.textContent;
+            if (!text.trim()) return;
+            const reversed = text.trim().split('\\n').reverse().join('\\n');
+            outputEl.textContent = reversed;
+            const toast = document.getElementById('toast');
+            toast.textContent = '已反转顺序';
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.textContent = '已复制到剪贴板';
+            }, 3000);
+        }
+
         function clearAll() {
             document.getElementById('input').value = '';
             document.getElementById('output').textContent = '';
