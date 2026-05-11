@@ -57,7 +57,7 @@ const HTML = `<!DOCTYPE html>
 <body>
     <div class="container">
         <h1>📧 邮件数据提取</h1>
-        <p class="subtitle">格式: 邮箱----密码----授权码----日期</p>
+        <p class="subtitle">格式: 邮箱----密码----授权码----日期 / 邮箱----授权码</p>
         
         <div class="card">
             <div class="card-title">输入数据 <span id="inputCount" class="count">0 条</span></div>
@@ -162,6 +162,8 @@ const HTML = `<!DOCTYPE html>
                 const parts = line.split('----');
                 if (parts.length >= 3) {
                     result += parts[0].trim() + '----' + parts[2].trim() + '\\n';
+                } else if (parts.length === 2) {
+                    result += parts[0].trim() + '----' + parts[1].trim() + '\\n';
                 }
             }
             
