@@ -90,8 +90,14 @@ const HTML = `<!DOCTYPE html>
         .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
+        .mode-toggle { display: flex; gap: 6px; padding: 4px; margin-bottom: 16px; background: var(--card-bg); border-radius: 8px; }
+        .mode-btn { flex: 1; padding: 10px 12px; background: transparent; color: var(--text-muted); border-radius: 6px; }
+        .mode-btn:hover { color: var(--accent); background: var(--accent-soft-bg); }
+        .mode-btn.active { color: var(--accent); background: var(--surface); font-weight: 600; box-shadow: 0 1px 4px var(--shadow); }
         .pwd-len { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 13px; color: var(--text-secondary); }
         .pwd-len input { width: 80px; padding: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+        .count-input { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
+        .count-input input { width: 120px; padding: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
         .date-group-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--accent); font-weight: 600; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
         .date-clear-btn { padding: 4px 10px; font-size: 12px; background: var(--clear-btn-bg); color: var(--text-muted); }
         .date-clear-btn:hover { background: var(--clear-hover-bg); color: #dc3545; }
@@ -186,14 +192,27 @@ const HTML = `<!DOCTYPE html>
         </div>
 
         <div id="panel-generate" class="tab-panel">
-            <p class="subtitle">粘贴邮箱（每行一个），用 AI 生成用户名 + 随机密码</p>
+            <p id="genSubtitle" class="subtitle">粘贴邮箱（每行一个），用 AI 生成用户名 + 随机密码</p>
 
-            <div class="card">
+            <div class="mode-toggle" role="group" aria-label="生成模式">
+                <button id="normalModeBtn" class="mode-btn active" onclick="setGenMode('normal')" aria-pressed="true">普通模式</button>
+                <button id="eduModeBtn" class="mode-btn" onclick="setGenMode('edu')" aria-pressed="false">Edu 模式</button>
+            </div>
+
+            <div id="normalGenSection" class="card">
                 <div class="card-title">邮箱列表 <span id="genCount" class="count">0 条</span></div>
                 <textarea id="genInput" placeholder="每行一个邮箱，例如：&#10;jiadan9621@163.com&#10;yangsitian@gmail.com"></textarea>
             </div>
 
-            <div class="pwd-len">
+            <div id="eduGenSection" class="card" style="display:none;">
+                <div class="card-title">生成数量 <span id="eduCountText" class="count">10 条</span></div>
+                <div class="count-input">
+                    <label for="eduCount">数量</label>
+                    <input id="eduCount" type="number" value="10" min="1" max="1000">
+                </div>
+            </div>
+
+            <div id="pwdLenRow" class="pwd-len">
                 <label for="pwdLen">密码长度</label>
                 <input id="pwdLen" type="number" value="16" min="3" max="64">
             </div>
@@ -385,6 +404,11 @@ const HTML = `<!DOCTYPE html>
         // ===== 信息生成 tab =====
         const GEN_STORAGE_KEY = 'genInfoHistory';
         const MAX_GEN = 1000;
+        const LOWER_ALPHA = 'abcdefghijklmnopqrstuvwxyz';
+        const USERNAME_CHARS = LOWER_ALPHA + '0123456789';
+        const EDU_DIGITS = '012356789';
+        const EDU_DOMAIN = '@stu.huel.edu.cn';
+        let genMode = 'normal';
         let genShowAll = false;
         let currentGenAccounts = [];
         let genExpandedKeys = new Set();
@@ -410,7 +434,34 @@ const HTML = `<!DOCTYPE html>
             document.getElementById('genCount').textContent = parseEmails().length + ' 条';
         }
 
+        function updateEduCount() {
+            const count = parseInt(document.getElementById('eduCount').value, 10);
+            document.getElementById('eduCountText').textContent = (count > 0 ? count : 0) + ' 条';
+        }
+
+        function setGenMode(mode) {
+            genMode = mode === 'edu' ? 'edu' : 'normal';
+            const isEdu = genMode === 'edu';
+            document.getElementById('normalModeBtn').classList.toggle('active', !isEdu);
+            document.getElementById('eduModeBtn').classList.toggle('active', isEdu);
+            document.getElementById('normalModeBtn').setAttribute('aria-pressed', String(!isEdu));
+            document.getElementById('eduModeBtn').setAttribute('aria-pressed', String(isEdu));
+            document.getElementById('normalGenSection').style.display = isEdu ? 'none' : 'block';
+            document.getElementById('eduGenSection').style.display = isEdu ? 'block' : 'none';
+            document.getElementById('pwdLenRow').style.display = isEdu ? 'none' : 'flex';
+            document.getElementById('genSubtitle').textContent = isEdu
+                ? '输入数量，生成 stu.huel.edu.cn 邮箱账号'
+                : '粘贴邮箱（每行一个），用 AI 生成用户名 + 随机密码';
+            if (isEdu) updateEduCount();
+            else updateGenCount();
+        }
+
         function clearGenInput() {
+            if (genMode === 'edu') {
+                document.getElementById('eduCount').value = '';
+                updateEduCount();
+                return;
+            }
             document.getElementById('genInput').value = '';
             updateGenCount();
         }
@@ -419,6 +470,12 @@ const HTML = `<!DOCTYPE html>
         const PWD_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
         const PWD_DIGIT = '23456789';
         function randChar(set) { return set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length]; }
+        function randInt(min, max) { return min + (crypto.getRandomValues(new Uint32Array(1))[0] % (max - min + 1)); }
+        function randomString(set, len) {
+            let s = '';
+            while (s.length < len) s += randChar(set);
+            return s;
+        }
         function shuffle(arr) {
             for (let i = arr.length - 1; i > 0; i--) {
                 const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
@@ -433,6 +490,45 @@ const HTML = `<!DOCTYPE html>
             if (len - 1 >= 3) body.push(randChar(PWD_LOWER), randChar(PWD_UPPER), randChar(PWD_DIGIT));
             while (body.length < len - 1) body.push(randChar(all));
             return randChar(PWD_LOWER + PWD_UPPER) + shuffle(body).join('');
+        }
+
+        function normalizeGenUsername(username, email) {
+            let u = String(username || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const source = String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (u.length < 6) u += source;
+            while (u.length < 6) u += randChar(USERNAME_CHARS);
+            return u.slice(0, 7);
+        }
+
+        function genEduAccount(used) {
+            let email = '';
+            let username = '';
+            do {
+                const nameLen = randInt(5, 6);
+                username = randChar('uvwxyz') + randomString(LOWER_ALPHA, nameLen - 1);
+                email = username + randomString(EDU_DIGITS, 13 - nameLen) + EDU_DOMAIN;
+            } while (used.has(email));
+            used.add(email);
+            return { email, username };
+        }
+
+        function generateEdu() {
+            const count = parseInt(document.getElementById('eduCount').value, 10);
+            if (!Number.isFinite(count) || count < 1) { showToast('请输入生成数量'); return; }
+            if (count > MAX_GEN) { showToast('单次最多生成 ' + MAX_GEN + ' 条'); return; }
+            const batch = Date.now();
+            const usedEmails = new Set();
+            const accounts = [];
+            for (let i = 0; i < count; i++) {
+                accounts.push({
+                    ts: batch,
+                    batch,
+                    ...genEduAccount(usedEmails),
+                    password: genPassword(16),
+                });
+            }
+            saveGenHistory(accounts);
+            openGenModal(accounts);
         }
 
         function buildBlock(email, username, password) {
@@ -454,6 +550,7 @@ const HTML = `<!DOCTYPE html>
         }
 
         async function generate() {
+            if (genMode === 'edu') { generateEdu(); return; }
             const emails = parseEmails();
             if (emails.length === 0) { showToast('请先输入邮箱'); return; }
             if (emails.length > 50) { showToast('单次最多 50 个邮箱，请分批'); return; }
@@ -469,7 +566,13 @@ const HTML = `<!DOCTYPE html>
                 if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
                 const len = document.getElementById('pwdLen').value;
                 const batch = Date.now();
-                const accounts = (data.results || []).map(r => ({ ts: batch, batch, email: r.email, username: r.username, password: genPassword(len) }));
+                const accounts = (data.results || []).map(r => ({
+                    ts: batch,
+                    batch,
+                    email: r.email,
+                    username: normalizeGenUsername(r.username, r.email),
+                    password: genPassword(len),
+                }));
                 saveGenHistory(accounts);
                 openGenModal(accounts);
             } catch (err) {
@@ -591,6 +694,7 @@ const HTML = `<!DOCTYPE html>
         renderGenHistory();
         applyThemeIcon();
         document.getElementById('genInput').addEventListener('input', updateGenCount);
+        document.getElementById('eduCount').addEventListener('input', updateEduCount);
         document.getElementById('genModal').addEventListener('click', function(e) { if (e.target === this) closeGenModal(); });
     </script>
 </body>
@@ -606,17 +710,30 @@ const USERNAME_SYS_PROMPT = `你是用户名生成助手。我会给你一批邮
 2. 第一个完整音节 + 其余音节首字母（jiadan -> jiad）
 3. 第一个音节首字母 + 后一个完整音节（jiadan -> jdan）
 4. 取中间某个完整音节（yangshenting -> shen）
-5. 纯数字或无法识别为拼音时，用常见拼音/英文起一个 5-6 位用户名
+5. 纯数字或无法识别为拼音时，用常见拼音/英文起一个 6-7 位用户名
 
 要求：
-- 用户名只含小写字母和数字、长度 3-6 位、自然好看。
+- 用户名只含小写字母和数字、长度 6-7 位、自然好看。
+- 如果缩写结果不足 6 位，用自然的字母或数字补足到 6-7 位。
 - 忽略邮箱前缀的数字后缀（jiadan9621 按 jiadan 处理）。
 - email 原样回填。
 - 输出 JSON 对象 {"results":[{"email":"原始邮箱","username":"用户名"}]}，不要解释、不要 markdown。`;
 
+const USERNAME_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+function randBackendChar(set) {
+  return set[Math.floor(Math.random() * set.length)];
+}
+
+function normalizeUsername(username, email) {
+  let u = String(username || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const source = String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (u.length < 6) u += source;
+  while (u.length < 6) u += randBackendChar(USERNAME_CHARS);
+  return u.slice(0, 7);
+}
+
 function fallbackUsername(email) {
-  const prefix = String(email).split('@')[0].toLowerCase().replace(/[^a-z]/g, '');
-  return prefix.slice(0, 6) || ('user' + Math.floor(Math.random() * 9000 + 1000));
+  return normalizeUsername('', email);
 }
 
 function extractPairs(out) {
@@ -644,14 +761,14 @@ function parseUsernameJson(out, emails) {
   const ordered = [];
   for (const it of Array.isArray(arr) ? arr : []) {
     if (it && it.email && it.username) {
-      const u = String(it.username).trim();
+      const u = normalizeUsername(it.username, it.email);
       map.set(String(it.email).trim().toLowerCase(), u);
-      ordered.push(u);
+      ordered.push(String(it.username).trim());
     }
   }
   return emails.map((email, i) => {
     const hit = map.get(email.trim().toLowerCase());
-    const byPos = ordered.length === emails.length ? ordered[i] : '';
+    const byPos = ordered.length === emails.length ? normalizeUsername(ordered[i], email) : '';
     return { email, username: hit || byPos || fallbackUsername(email) };
   });
 }
